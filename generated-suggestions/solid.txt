@@ -1,0 +1,83 @@
+@Injectable()
+export class SchedulesService {
+  constructor(
+    private readonly tasksService: TasksService,
+    private readonly processService: ProcessService,
+    private readonly httpService: HttpService,
+  ) { }
+
+  async getNewProcessId(): Promise<number> {
+    try {
+      const response = await this.httpService
+        .get<{ idProcess: number }>('http://localhost:3010/placements/strategy/cube')
+        .toPromise();
+
+      return response.data.idProcess;
+    } catch (error) {
+      console.error('Error al obtener el nuevo ID de proceso:', error);
+      throw new Error('No se pudo obtener el nuevo ID de proceso');
+    }
+  }
+
+  async createNewProcess(taskId: string, requiredBy: string, taskName: string): Promise<Process> {
+    console.log('♻ ♻ ♻ Creando un nuevo proceso ♻ ♻ ♻');
+
+    const processId = await this.getNewProcessId();
+
+    const newProcess = this.processService.create({
+      taskId,
+      createdAt: new Date(),
+      status: 'Processing',
+      requiredBy,
+      taskName,
+      processId,
+    });
+
+    return newProcess;
+  }
+
+  async getProcessByTaskIdAndDate(taskId: string, currentDate: Date): Promise<Process | null> {
+    const startOfToday = new Date(currentDate.setHours(0, 0, 0, 0));
+    const endOfToday = new Date(currentDate.setHours(23, 59, 59, 999));
+
+    const process = await this.processService.findByTaskIdAndDate(taskId, startOfToday, endOfToday);
+
+    return process ?? null;
+  }
+
+  @Cron('*/15 * * * * *')
+  async checkDownloadTime() {
+    console.log(' ----------------- Comprobando horario de descarga -----------------');
+
+    const tasks = await this.tasksService.getAllTasks();
+
+    for (const task of tasks) {
+      const currentDate = new Date();
+      const process = await this.getProcessByTaskIdAndDate(task.id, currentDate);
+
+      // Si no hay un proceso para la tarea y la hora actual coincide con la hora de descarga
+      if (!process && task.downloadTime === currentDate.getHours()) {
+        const newProcess = await this.createNewProcess(task.id, task.requiredBy, task.name);
+        await this.tasksService.executeTask(newProcess.id, newProcess.processId);
+      }
+
+      // Si hay un proceso en ejecución para la tarea
+      if (process && process.status === 'Processing') {
+        const statusResponse = await this.tasksService.getTaskStatus(process.processId);
+
+        if (statusResponse.status === 'Error') {
+          console.error('Error en el proceso con id', process.processId);
+          const newProcess = await this.createNewProcess(task.id, task.requiredBy, task.name);
+          await this.tasksService.executeTask(newProcess.id, newProcess.processId);
+        }
+
+        if (statusResponse.status === 'Finished') {
+          console.log('Proceso terminado con éxito');
+          const fileUrl = statusResponse.file;
+          const filePath = await this.tasksService.downloadFile(fileUrl);
+          await this.processService.updateProcessAfterDownload(process.id, filePath);
+        }
+      }
+    }
+  }
+}

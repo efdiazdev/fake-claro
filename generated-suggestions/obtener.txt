@@ -1,0 +1,247 @@
+//Para cumplir con los requerimientos mencionados, se podría utilizar la siguiente implementación en TypeScript utilizando NestJS y MongoDB:
+
+//Para almacenar la información de horarios de descarga, se podría definir un modelo de MongoDB y un servicio que permita interactuar con este modelo:
+
+//download-time.model.ts
+
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document } from 'mongoose';
+
+export type DownloadTimeDocument = DownloadTime & Document;
+
+@Schema()
+export class DownloadTime {
+  @Prop({ required: true })
+  idProcess: number;
+
+  @Prop({ required: true })
+  downloadTime: Date;
+
+  @Prop({ required: true })
+  user: string;
+
+  @Prop({ required: true, default: Date.now })
+  modifiedAt: Date;
+}
+
+export const DownloadTimeSchema = SchemaFactory.createForClass(DownloadTime);
+//download-time.service.ts
+
+
+import { Injectable } from '@nestjs/common';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import { DownloadTime, DownloadTimeDocument } from './download-time.model';
+
+@Injectable()
+export class DownloadTimeService {
+  constructor(
+    @InjectModel(DownloadTime.name)
+    private readonly downloadTimeModel: Model<DownloadTimeDocument>,
+  ) {}
+
+  async createDownloadTime(
+    idProcess: number,
+    downloadTime: Date,
+    user: string,
+  ): Promise<DownloadTime> {
+    const downloadTimeObj = new this.downloadTimeModel({
+      idProcess,
+      downloadTime,
+      user,
+    });
+    return await downloadTimeObj.save();
+  }
+
+  async getDownloadTime(idProcess: number): Promise<DownloadTime> {
+    return await this.downloadTimeModel.findOne({ idProcess }).exec();
+  }
+
+  async updateDownloadTime(
+    idProcess: number,
+    downloadTime: Date,
+    user: string,
+  ): Promise<DownloadTime> {
+    const downloadTimeObj = await this.downloadTimeModel
+      .findOneAndUpdate(
+        { idProcess },
+        { downloadTime, user, modifiedAt: new Date() },
+        { new: true },
+      )
+      .exec();
+    return downloadTimeObj;
+  }
+}
+//Luego, para establecer o modificar el horario de descarga, se podría definir un controlador que se encargue de recibir los datos de la solicitud y procesarlos:
+
+//download-time.controller.ts
+
+
+import { Controller, Post, Body } from '@nestjs/common';
+import { DownloadTimeService } from './download-time.service';
+
+@Controller('download-time')
+export class DownloadTimeController {
+  constructor(private readonly downloadTimeService: DownloadTimeService) {}
+
+  @Post()
+  async setDownloadTime(
+    @Body('idProcess') idProcess: number,
+    @Body('downloadTime') downloadTime: Date,
+    @Body('user') user: string,
+  ) {
+    let downloadTimeObj = await this.downloadTimeService.getDownloadTime(
+      idProcess,
+    );
+    if (!downloadTimeObj) {
+      downloadTimeObj = await this.downloadTimeService.createDownloadTime(
+        idProcess,
+        downloadTime,
+        user,
+      );
+    } else {
+      downloadTimeObj = await this.downloadTimeService.updateDownloadTime(
+        idProcess,
+        downloadTime,
+        user,
+      );
+    }
+    return { message: 'Download time set successfully', data: downloadTimeObj };
+  }
+}
+//Para comprobar el horario de descarga cada media hora y ejecutar el proceso de descarga si es necesario, se podría crear un worker que utilice el servicio de descarga de archivos:
+
+//download-worker.ts
+
+import { Injectable, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
+import { InjectModel } from '@nestjs/mongoose';
+import { Model } from 'mongoose';
+import axios from 'axios';
+import { Placement } from './interfaces/placement.interface';
+import { Download } from './interfaces/download.interface';
+import { PlacementStatus } from './enums/placement-status.enum';
+import { DownloadStatus } from './enums/download-status.enum';
+
+@Injectable()
+export class DownloadWorker {
+  private readonly logger = new Logger(DownloadWorker.name);
+
+  constructor(
+    @InjectModel('Placement') private readonly placementModel: Model<Placement>,
+    @InjectModel('Download') private readonly downloadModel: Model<Download>,
+  ) {}
+
+  @Cron('0 */30 * * * *')
+  async handleCron() {
+    this.logger.debug('Executing cron job...');
+
+    const placements = await this.placementModel.find().exec();
+
+    for (const placement of placements) {
+      const now = new Date();
+      const scheduleTime = new Date(placement.scheduleTime);
+      if (now >= scheduleTime) {
+        this.logger.debug(`Downloading file for placement ${placement.id}...`);
+        const download = await this.downloadModel.findOne({ placementId: placement.id }).exec();
+        if (download) {
+          if (download.status === DownloadStatus.FINISHED) {
+            this.logger.debug(`File already downloaded for placement ${placement.id}.`);
+            continue;
+          }
+          if (download.status === DownloadStatus.ERROR) {
+            this.logger.debug(`Re-downloading file for placement ${placement.id} due to previous error.`);
+          }
+        } else {
+          this.logger.debug(`Creating new download entry for placement ${placement.id}...`);
+          const newDownload = new this.downloadModel({
+            placementId: placement.id,
+            status: DownloadStatus.PROCESSING,
+          });
+          await newDownload.save();
+        }
+
+        const placementStatus = await this.getPlacementStatus(placement.id);
+        if (placementStatus.status === PlacementStatus.FINISHED) {
+          const fileUrl = placementStatus.file;
+          const downloadResult = await this.downloadFile(fileUrl, placement.id);
+          if (downloadResult.status === DownloadStatus.FINISHED) {
+            const updatedDownload = await this.downloadModel.findOneAndUpdate(
+              { placementId: placement.id },
+              { $set: { status: DownloadStatus.FINISHED, filePath: downloadResult.filePath } },
+              { new: true },
+            );
+            this.logger.debug(`File downloaded for placement ${placement.id}.`);
+          } else {
+            await this.downloadModel.findOneAndUpdate(
+              { placementId: placement.id },
+              { $set: { status: DownloadStatus.ERROR } },
+              { new: true },
+            );
+            this.logger.debug(`Error downloading file for placement ${placement.id}.`);
+          }
+        } else if (placementStatus.status === PlacementStatus.PROCESSING) {
+          continue;
+        } else if (placementStatus.status === PlacementStatus.ERROR) {
+          await this.downloadModel.findOneAndUpdate(
+            { placementId: placement.id },
+            { $set: { status: DownloadStatus.ERROR } },
+            { new: true },
+          );
+          this.logger.debug(`Error with placement ${placement.id}.`);
+        }
+      }
+    }
+  }
+  //download-worker.ts
+  async function getPlacementStatus(idProcess: number): Promise<PlacementStatus> {
+    const placementUrl = `http://external-api/placement/${idProcess}`;
+    const response = await axios.get(placementUrl);
+    const placementData: PlacementStatus = response.data;
+    
+    if (placementData.status === "Error") {
+      const newIdProcess = await requestNewIdProcess();
+      return getPlacementStatus(newIdProcess);
+    } else if (placementData.status === "Processing") {
+      await delay(POLLING_INTERVAL);
+      return getPlacementStatus(idProcess);
+    } else if (placementData.status === "Finished") {
+      return placementData;
+    }
+  }
+//   La función recibe el parámetro idProcess que es el identificador del proceso de descarga del archivo. En la primera línea se construye la URL de la API externa para obtener el estado del proceso de descarga. Luego, se realiza la petición HTTP mediante la librería axios. Si la petición es exitosa, se obtiene la respuesta y se guarda en la variable placementData.
+
+// Luego, se realiza un chequeo del estado del proceso de descarga. Si el estado es "Error", se solicita un nuevo idProcess y se llama recursivamente la función getPlacementStatus con el nuevo identificador. Si el estado es "Processing", se espera un tiempo POLLING_INTERVAL (definido anteriormente) y se vuelve a llamar a la función getPlacementStatus con el mismo identificador. Si el estado es "Finished", se devuelve el objeto placementData con la información del estado del proceso de descarga.
+
+// Ahora, continuaremos con la función downloadFile:
+
+async function downloadFile(idProcess: number, downloadTime: Date): Promise<string> {
+  const placementStatus = await getPlacementStatus(idProcess);
+
+  const downloadPath = `downloads/${downloadTime.toISOString()}.7z`;
+  const fileUrl = placementStatus.file;
+
+  await axios({
+    method: 'get',
+    url: fileUrl,
+    responseType: 'stream'
+  }).then(response => {
+    const writer = fs.createWriteStream(downloadPath);
+    response.data.pipe(writer);
+
+    return new Promise((resolve, reject) => {
+      writer.on('finish', resolve);
+      writer.on('error', reject);
+    });
+  });
+
+  return downloadPath;
+}
+
+// sta función recibe dos parámetros: idProcess, que es el identificador del proceso de descarga del archivo, y downloadTime, que es la fecha y hora de la descarga del archivo. En primer lugar, se llama a la función getPlacementStatus para obtener el estado del proceso de descarga.
+
+// Luego, se construye la ruta donde se almacenará el archivo descargado en la variable downloadPath. También se obtiene la URL del archivo descargado desde el objeto placementStatus.
+
+// Después, se utiliza la librería axios para descargar el archivo. Se define la petición HTTP con el método get, la URL del archivo y el tipo de respuesta como stream. La respuesta es manejada mediante una promesa, donde se crea un stream de escritura en la ruta downloadPath y se escribe el contenido de la respuesta en el archivo. Si la escritura finaliza correctamente, se resuelve la promesa devolviendo la ruta donde se almacenó el archivo.
+
+}
