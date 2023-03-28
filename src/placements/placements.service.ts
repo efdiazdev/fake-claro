@@ -20,8 +20,32 @@ export class PlacementsService {
       randomNumber = Math.floor(Math.random() * 1000) + 1;
     }
     this.generatedNumbers.push(randomNumber);
-    return {idProcess:randomNumber};
+    return { idProcess: randomNumber };
   }
+
+  getStatusProcess(idProcess: number) {
+    if (this.generatedNumbers.includes(idProcess)) {
+      return {
+        progress: 80,
+        status: "Processing",
+        idProcess: idProcess
+      };
+    } else {
+      return { 
+        progress: 100,
+        status: "Finished",
+        idProcess: idProcess
+      };
+    }
+  }
+
+
+  // console.log('Consultando status del proceso:', idProcess)
+  // return {
+  //   progress: 80,
+  //   status: "Processing",
+  //   idProcess: idProcess
+  // }
 
   findOne(id: number) {
     return `This action returns a #${id} placement`;

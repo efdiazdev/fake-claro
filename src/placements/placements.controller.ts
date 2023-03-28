@@ -29,12 +29,7 @@ export class PlacementsController {
 
   @Get(':idProcess')
   getStatusProcess(@Param('idProcess') idProcess: number) {
-    console.log('Consultando status del proceso:', idProcess)
-    return {
-      progress: 80,
-      status: "Processing",
-      idProcess: idProcess
-    }
+    return this.placementsService.getStatusProcess(idProcess);
   }
 
   @Patch(':id')
