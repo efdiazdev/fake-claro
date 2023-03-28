@@ -1,0 +1,107 @@
+
+src/
+├── app.controller.spec.ts
+├── app.controller.ts
+├── app.module.ts
+├── app.service.ts
+├── claro/
+│   ├── claro-task-strategy.service.spec.ts
+│   ├── claro-task-strategy.service.ts
+│   └── claro.module.ts
+├── common/
+│   ├── config/
+│   │   ├── config.module.ts
+│   │   ├── config.service.ts
+│   │   └── index.ts
+│   ├── dto/
+│   │   ├── create-task.dto.ts
+│   │   ├── task-status.dto.ts
+│   │   └── update-task.dto.ts
+│   ├── exceptions/
+│   │   ├── http-exception.filter.ts
+│   │   ├── http-exception.ts
+│   │   ├── invalid-arguments.exception.ts
+│   │   ├── not-found.exception.ts
+│   │   └── unauthorized.exception.ts
+│   └── utils/
+│       ├── app-logger.service.ts
+│       ├── http-helper.ts
+│       ├── index.ts
+│       ├── validation.pipe.ts
+│       └── version.helper.ts
+├── database/
+│   ├── migrations/
+│   ├── seeds/
+│   ├── database.module.ts
+│   └── database.service.ts
+├── main.ts
+├── schedules/
+│   ├── schedules.module.ts
+│   ├── schedules.service.spec.ts
+│   ├── schedules.service.ts
+│   └── strategies/
+│       ├── task-strategy.interface.ts
+│       ├── ticker-task-strategy.service.spec.ts
+│       ├── ticker-task-strategy.service.ts
+│       └── ticker.module.ts
+├── tasks/
+│   ├── task.entity.ts
+│   ├── tasks.controller.spec.ts
+│   ├── tasks.controller.ts
+│   ├── tasks.module.ts
+│   ├── tasks.service.spec.ts
+│   ├── tasks.service.ts
+│   ├── transformers/
+│   │   ├── index.ts
+│   │   ├── task-status.transformer.ts
+│   │   └── task.transformer.ts
+│   └── validators/
+│       ├── create-task.validator.ts
+│       ├── update-task.validator.ts
+│       └── validators.module.ts
+└── ticker/
+    ├── ticker-task-strategy.service.spec.ts
+    ├── ticker-task-strategy.service.ts
+    └── ticker.module.ts
+
+////////////////////////////////////////////////////////////////////////////////////////
+src/
+├── app.module.ts
+├── main.ts
+├── schedules/
+│   ├── schedules.module.ts
+│   ├── schedules.service.ts
+│   ├── tasks/
+│   │   ├── tasks.module.ts
+│   │   ├── tasks.controller.ts
+│   │   ├── tasks.service.ts
+│   │   └── dto/
+│   │       ├── create-task.dto.ts
+│   │       ├── update-task.dto.ts
+│   │       └── task.dto.ts
+│   ├── strategies/
+│   │   ├── claro-task.strategy.ts
+│   │   ├── ticker-task.strategy.ts
+│   │   └── task-strategy.interface.ts
+│   └── processes/
+│       ├── processes.module.ts
+│       ├── processes.controller.ts
+│       ├── processes.service.ts
+│       └── dto/
+│           ├── create-process.dto.ts
+│           ├── update-process.dto.ts
+│           └── process.dto.ts
+└── shared/
+    ├── database/
+    │   ├── entities/
+    │   │   ├── task.entity.ts
+    │   │   └── process.entity.ts
+    │   ├── repositories/
+    │   │   ├── tasks.repository.ts
+    │   │   └── processes.repository.ts
+    │   └── database.module.ts
+    ├── http/
+    │   └── http.module.ts
+    └── logger/
+        ├── logger.service.ts
+        └── logger.module.ts

@@ -2,9 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { CreatePlacementDto } from './dto/create-placement.dto';
 import { UpdatePlacementDto } from './dto/update-placement.dto';
 
+interface ProcessStatus {
+  progress: number;
+  status: string;
+  idProcess: number;
+}
+
 @Injectable()
 export class PlacementsService {
-  private generatedNumbers: number[] = [];
+  private generatedProcess: ProcessStatus[] = [];
 
   create(createPlacementDto: CreatePlacementDto) {
     return 'This action adds a new placement';
@@ -15,37 +21,40 @@ export class PlacementsService {
   }
 
   createIdProcess() {
+    let processStatus = {
+      progress: 0,
+      status: "Processing",
+      idProcess: 0
+    }
     let randomNumber = Math.floor(Math.random() * 1000) + 1;
-    while (this.generatedNumbers.includes(randomNumber)) {
+    while (this.generatedProcess.map(p => p.idProcess).includes(randomNumber)) {
       randomNumber = Math.floor(Math.random() * 1000) + 1;
     }
-    this.generatedNumbers.push(randomNumber);
+    processStatus = { ...processStatus, idProcess: randomNumber }
+    this.generatedProcess.push(processStatus);
+    console.log(this.generatedProcess)
     return { idProcess: randomNumber };
   }
 
   getStatusProcess(idProcess: number) {
-    if (this.generatedNumbers.includes(idProcess)) {
-      return {
-        progress: 80,
-        status: "Processing",
-        idProcess: idProcess
-      };
-    } else {
-      return { 
+    console.log(idProcess)
+    let processStatus = this.generatedProcess.find(p => p.idProcess == idProcess ? p : null);
+    console.log(processStatus)
+    if (processStatus.progress < 80) {
+      processStatus.progress += 20;
+      this.generatedProcess = this.generatedProcess.map(p => p.idProcess == idProcess ? processStatus : p);
+      console.log(this.generatedProcess)
+      return processStatus;
+    }
+    else {
+      const processStatus = {
         progress: 100,
         status: "Finished",
-        idProcess: idProcess
+        idProcess:parseInt(idProcess.toString())
       };
+      return processStatus;
     }
   }
-
-
-  // console.log('Consultando status del proceso:', idProcess)
-  // return {
-  //   progress: 80,
-  //   status: "Processing",
-  //   idProcess: idProcess
-  // }
 
   findOne(id: number) {
     return `This action returns a #${id} placement`;

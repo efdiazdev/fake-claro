@@ -1,0 +1,141 @@
+Una solución para desacoplar el código y hacerlo más agnóstico es aplicar el patrón de diseño "Estrategia". Este patrón permite definir una familia de algoritmos, encapsular cada uno de ellos y hacerlos intercambiables.
+
+En este caso, podemos crear una interfaz TaskStrategy que defina las operaciones comunes que deben implementar las estrategias para cada tipo de tarea. Luego, puedes implementar diferentes clases de estrategias para cada tipo de tarea (por ejemplo, ClaroTaskStrategy y TickerTaskStrategy). Finalmente, en SchedulesService, puedes inyectar estas estrategias e invocarlas según el tipo de tarea encontrada.
+
+Aquí hay un ejemplo de cómo puedes comenzar a implementar esta solución:
+
+Crea la interfaz TaskStrategy:
+// task-strategy.interface.ts
+export interface TaskStrategy {
+  getNewProcessId(): Promise<number>;
+  getProcessStatus(processId: number): Promise<any>;
+}
+Implementa las estrategias para cada tipo de tarea:
+// claro-task-strategy.ts
+import { TaskStrategy } from './task-strategy.interface';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
+
+@Injectable()
+export class ClaroTaskStrategy implements TaskStrategy {
+  constructor(private readonly httpService: HttpService) {}
+
+  async getNewProcessId(): Promise<number> {
+    // Lógica para obtener el nuevo ID de proceso para Claro
+  }
+
+  async getProcessStatus(processId: number): Promise<any> {
+    // Lógica para obtener el estado del proceso para Claro
+  }
+}
+
+// ticker-task-strategy.ts
+import { TaskStrategy } from './task-strategy.interface';
+import { HttpService } from '@nestjs/axios';
+import { firstValueFrom } from 'rxjs';
+
+@Injectable()
+export class TickerTaskStrategy implements TaskStrategy {
+  constructor(private readonly httpService: HttpService) {}
+
+  async getNewProcessId(): Promise<number> {
+    // Lógica para obtener el nuevo ID de proceso para Ticker
+  }
+
+  async getProcessStatus(processId: number): Promise<any> {
+    // Lógica para obtener el estado del proceso para Ticker
+  }
+}
+Modifica el servicio ProcessService para que acepte la interfaz TaskStrategy y utilice sus métodos:
+// process.service.ts
+import { TaskStrategy } from './task-strategy.interface';
+
+// ...
+
+export class ProcessService {
+  constructor(
+    // ...
+    private taskStrategy: TaskStrategy
+  ) {}
+
+  async getNewProcessId(): Promise<number> {
+    return this.taskStrategy.getNewProcessId();
+  }
+
+  async getProcessStatus(processId: number): Promise<any> {
+    return this.taskStrategy.getProcessStatus(processId);
+  }
+
+  // ...
+}
+Finalmente, modifica SchedulesService para inyectar las estrategias y utilizarlas según el tipo de tarea:
+// schedules.service.ts
+import { ClaroTaskStrategy } from './claro-task-strategy';
+import { TickerTaskStrategy } from './ticker-task-strategy';
+
+// ...
+
+@Injectable()
+export class SchedulesService {
+  constructor(
+    private processService: ProcessService,
+    private tasksService: TasksService,
+    private claroTaskStrategy: ClaroTaskStrategy,
+    private tickerTaskStrategy: TickerTaskStrategy
+  ) {}
+
+  // ...
+
+  async checkDownloadTime() {
+    // ...
+
+    for (const task of tasks) {
+      // ...
+
+      const strategy = this.getTaskStrategy(taskType);
+      this.processService.setTaskStrategy(strategy);
+
+      // ...
+    }
+  }
+
+  private getTaskStrategy(taskType: string): TaskStrategy {
+    switch (taskType) {
+      case 'cube':
+      case 'placements':
+        return this.claroTaskStrategy;
+      case 'ticker':
+        return this.tickerTaskStrategy;
+      default:
+        throw new Error(`Unsupported task type: ${taskType}`);
+    }
+  }
+}
+Con estos cambios, tendrás un diseño más desacoplado y fácil de mantener. Si necesitas agregar un nuevo tipo de tarea, simplemente crea una nueva clase que implemente TaskStrategy y modifica SchedulesService para inyectar y utilizar la nueva estrategia.
+
+
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+La función setTaskStrategy no se muestra en el ejemplo proporcionado, pero se podría implementar en la clase ProcessService de la siguiente manera:
+
+typescript
+Copy code
+import { TaskStrategy } from './task-strategy.interface';
+
+export class ProcessService {
+  private taskStrategy: TaskStrategy;
+
+  constructor() {}
+
+  setTaskStrategy(strategy: TaskStrategy) {
+    this.taskStrategy = strategy;
+  }
+
+  async getNewProcessId(): Promise<number> {
+    return this.taskStrategy.getNewProcessId();
+  }
+
+  async getProcessStatus(processId: number): Promise<any> {
+    return this.taskStrategy.getProcessStatus(processId);
+  }
+}
+La función setTaskStrategy simplemente establece la estrategia de tarea a utilizar en la clase ProcessService. Al llamar a setTaskStrategy con una instancia de una clase que implementa la interfaz TaskStrategy, la clase ProcessService utilizará los métodos implementados en esa clase cuando se llame a getNewProcessId o getProcessStatus.

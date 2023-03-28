@@ -3,6 +3,12 @@ import { PlacementsService } from './placements.service';
 import { CreatePlacementDto } from './dto/create-placement.dto';
 import { UpdatePlacementDto } from './dto/update-placement.dto';
 
+interface ProcessStatus {
+  progress: number;
+  status: string;
+  idProcess: number;
+}
+
 @Controller('placements')
 export class PlacementsController {
   constructor(private readonly placementsService: PlacementsService) { }
@@ -28,7 +34,7 @@ export class PlacementsController {
   }
 
   @Get(':idProcess')
-  getStatusProcess(@Param('idProcess') idProcess: number) {
+  getStatusProcess(@Param('idProcess') idProcess: number): ProcessStatus {
     return this.placementsService.getStatusProcess(idProcess);
   }
 
